@@ -1,0 +1,7 @@
+static-ffmpeg
+pymongo
+python-dotenv
+tidalapi
+requests
+numpy==1.23.5
+youtube_dl
