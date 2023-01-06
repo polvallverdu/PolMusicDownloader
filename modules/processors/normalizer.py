@@ -1,6 +1,7 @@
 import os
 import soundfile as sf
 import numpy as np
+import math
 
 def process_path(in_file_path: str, out_file_path: str):
   file = sf.SoundFile(in_file_path)
@@ -14,6 +15,18 @@ def process_path(in_file_path: str, out_file_path: str):
   del out, readed_file
   file.close()
   file_out.close()
+  
+  return peak
+
+def get_peak_path(in_file_path: str):
+  sfile = sf.SoundFile(in_file_path)
+  CHUNK_SIZE = 44100*4
+  peak = 0
+  for i in range(math.ceil(len(sfile) / CHUNK_SIZE)):
+    chunk = sfile.read(CHUNK_SIZE, dtype="float32")
+    _peak = get_peak(chunk)
+    peak = _peak if _peak > peak else peak
+    del chunk
   
   return peak
 

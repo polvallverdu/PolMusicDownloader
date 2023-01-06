@@ -23,17 +23,17 @@ class TidalClient:
     self.login()
   
   def login(self):
-    if session is None or not session.check_login():
+    if self.session is None or not self.session.check_login():
       print("Invalid session, logging in again")
-      session = tidalapi.Session()
+      self.session = tidalapi.Session()
       
-      # TODO: Login with playwright
+      # TODO: Login with playwright + load dotenv
       # success = session.login(os.getenv('TIDAL_USERNAME'), os.getenv('TIDAL_PASSWORD'))
       
-      success = session.login_oauth_simple()
+      success = self.session.login_oauth_simple()
       
       if success:
-        pickle.dump(session, open(SESSION_PATH, "wb"))
+        pickle.dump(self.session, open(SESSION_PATH, "wb"))
       else: 
         print("Failed to login to Tidal")
         exit(1)
@@ -47,6 +47,14 @@ class TidalClient:
     #            tidalapi.Video,
     #            tidalapi.Playlist,
     #            None]
+    
+    # result = {
+    #         'artists': self.request.map_json(json_obj['artists'], self.parse_artist),
+    #         'albums': self.request.map_json(json_obj['albums'], self.parse_album),
+    #         'tracks': self.request.map_json(json_obj['tracks'], self.parse_track),
+    #         'videos': self.request.map_json(json_obj['videos'], self.parse_video),
+    #         'playlists': self.request.map_json(json_obj['playlists'], self.parse_playlist)
+    #     }
     
     return self.session.search(query, type)
   
@@ -76,8 +84,9 @@ class TidalClient:
       "platform": "tidal",
       "id": track.id,
       "title": track.name,
+      "explicit": track.explicit,
       "thumbnail": album.image(1280),
-      "thumbnail_video": album.video(1280),
+      #"thumbnail_video": album.video(1280),
       "url": f"https://tidal.com/browse/track/{track.id}",
       "album": album.name,
       "tags": [],
@@ -85,7 +94,7 @@ class TidalClient:
       "duration": track.duration,
       "upload_date": track.tidal_release_date.timestamp(),
       "uploader": [artist.name for artist in artists],
-      "uploader_id": album.artist,
+      "uploader_id": album.artist.id,
       "popularity": {
         "tidal": track.popularity,
       },
@@ -93,25 +102,51 @@ class TidalClient:
       "volume_number": track.volume_num,
     }
     
+    if album.video_cover:
+      data["thumbnail_video"] = album.video(1280)
+    
     if lyrics:
       data["lyrics"] = lyrics.subtitles
     
     return data
 
-  def download(self, track: tidalapi.Track) -> tuple(uuid.UUID, str, dict)|None:
+  # Normalizing
+  # def download_track(self, track: tidalapi.Track) -> tuple[uuid.UUID, str, dict]:
+  #   download_uuid = uuid.uuid4()
+  #   formatted_data = self.format_data(track)
+  #   formatted_data["uuid"] = str(download_uuid)
+    
+  #   path = get_download_path(formatted_data)
+  #   download_path = f"{path}/song.flac"
+  #   download_pathnn = download_path.replace(".flac", "_nn.flac")
+    
+  #   download_url = track.get_url()
+  #   os.system('ffmpeg -i "{}" -af aresample=resampler=soxr -ar 44100 "{}"'.format(download_url, download_pathnn))
+  #   random_delay()
+  #   if not os.path.exists(download_pathnn):
+  #     return None, None, None
+    
+  #   normalizer.process_path(download_pathnn, download_path)
+  #   os.remove(download_pathnn)
+    
+  #   return download_uuid, path, formatted_data
+  
+  def download_track(self, track: tidalapi.Track) -> tuple[uuid.UUID, str, dict]:
     download_uuid = uuid.uuid4()
     formatted_data = self.format_data(track)
     formatted_data["uuid"] = str(download_uuid)
     
-    download_path = get_download_path(formatted_data)
-    download_pathnn = download_path.replace(".flac", "_nn.flac")
+    path = get_download_path(formatted_data)
+    download_path = f"{path}/song.flac"
     
     download_url = track.get_url()
-    os.system('ffmpeg -i "{}" -af aresample=resampler=soxr -ar 44100 "{}"'.format(download_url, download_pathnn))
-    if not os.path.exists(download_pathnn):
-      return None
+    os.system('ffmpeg -i "{}" -af aresample=resampler=soxr -ar 44100 "{}"'.format(download_url, download_path))
+    random_delay()
+    if not os.path.exists(download_path):
+      return None, None, None
     
-    normalizer.process_path(download_pathnn, download_path)
-    os.remove(download_pathnn)
+    formatted_data["peak"] = normalizer.get_peak_path(download_path)
     
-    return download_uuid, download_path, formatted_data
+    return download_uuid, path, formatted_data
+
+STATICTIDAL = TidalClient()

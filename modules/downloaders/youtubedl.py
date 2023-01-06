@@ -30,13 +30,6 @@ def search_soundcloud(query: str) -> dict:
   with youtube_dl.YoutubeDL(YDL_OPTS) as ydl:
     return ydl.extract_info(f"scsearch:{query}", download=False)
 
-def get_platform(info_dict: dict) -> str:
-  if "soundcloud.com" in info_dict["uploader_url"]:
-    return "soundcloud"
-  elif "youtube.com" in info_dict["uploader_url"]:
-    return "youtube"
-  return "unknown"
-
 def format_data(info_dict: dict) -> dict:
   return {
     "platform": info_dict["extractor"].lower(),
@@ -59,22 +52,55 @@ def format_data(info_dict: dict) -> dict:
     }
   }
 
-def download_song(url: str) -> tuple(uuid.UUID, str, dict)|None:
+def get_song_data(url: str) -> dict|None:
   with youtube_dl.YoutubeDL(YDL_OPTS) as ydl:
     info_dict = ydl.extract_info(url, download=False)
+    if info_dict is None:
+      return None, None, None
+    formatted_data = format_data(info_dict)
+    return formatted_data
+
+# Normalizing
+# def download_song(url: str) -> tuple[uuid.UUID, str, dict]:
+#   with youtube_dl.YoutubeDL(YDL_OPTS) as ydl:
+#     info_dict = ydl.extract_info(url, download=False)
+#     if info_dict is None:
+#       return None, None, None
+#     formatted_data = format_data(info_dict)
+#     download_uuid = uuid.uuid4()
+#     formatted_data["uuid"] = str(download_uuid)
+    
+#     path = get_download_path(formatted_data)
+#     download_path = f"{path}/song.flac"
+#     download_pathnn = download_path.replace(".flac", "_nn.flac")
+    
+#     # Download the song with ffmpeg
+#     os.system('ffmpeg -i "{}" -af aresample=resampler=soxr -ar 44100 "{}"'.format(info_dict["url"], download_pathnn))
+#     if not os.path.exists(download_pathnn):
+#       return None, None, None
+    
+#     normalizer.process_path(download_pathnn, download_path)
+#     os.remove(download_pathnn)
+    
+#     return download_uuid, path, formatted_data
+
+def download_song(url: str) -> tuple[uuid.UUID, str, dict]:
+  with youtube_dl.YoutubeDL(YDL_OPTS) as ydl:
+    info_dict = ydl.extract_info(url, download=False)
+    if info_dict is None:
+      return None, None, None
     formatted_data = format_data(info_dict)
     download_uuid = uuid.uuid4()
     formatted_data["uuid"] = str(download_uuid)
     
-    download_path = get_download_path(formatted_data)
-    download_pathnn = download_path.replace(".flac", "_nn.flac")
+    path = get_download_path(formatted_data)
+    download_path = f"{path}/song.flac"
     
     # Download the song with ffmpeg
-    os.system('ffmpeg -i "{}" -af aresample=resampler=soxr -ar 44100 "{}"'.format(info_dict["url"], download_pathnn))
-    if not os.path.exists(download_pathnn):
-      return None
+    os.system('ffmpeg -i "{}" -af aresample=resampler=soxr -ar 44100 "{}"'.format(info_dict["url"], download_path))
+    if not os.path.exists(download_path):
+      return None, None, None
     
-    normalizer.process_path(download_pathnn, download_path)
-    os.remove(download_pathnn)
+    formatted_data["peak"] = normalizer.get_peak_path(download_path)
     
-    return download_uuid, download_path, formatted_data
+    return download_uuid, path, formatted_data
